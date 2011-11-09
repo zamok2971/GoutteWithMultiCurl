@@ -2,6 +2,7 @@
 
 namespace Goutte;
 
+use MultiClient;
 use Symfony\Component\BrowserKit\Client as BaseClient;
 use Symfony\Component\BrowserKit\History;
 use Symfony\Component\BrowserKit\CookieJar;
@@ -31,7 +32,9 @@ class Client extends BaseClient
     const VERSION = '0.1';
 
     protected $zendConfig;
+
     protected $headers = array();
+
     protected $auth = null;
 
     public function __construct(array $zendConfig = array(), array $server = array(), History $history = null, CookieJar $cookieJar = null)
@@ -49,10 +52,122 @@ class Client extends BaseClient
     public function setAuth($user, $password = '', $type = ZendClient::AUTH_BASIC)
     {
         $this->auth = array(
-            'user'     => $user,
+            'user' => $user,
             'password' => $password,
-            'type'     => $type
+            'type' => $type
         );
+    }
+
+    /**
+     * Calls a URI.
+     *
+     * @param string  $method        The request method
+     * @param string  $uri           The URI to fetch
+     * @param array   $parameters    The Request parameters
+     * @param array   $files         The files
+     * @param array   $server        The server parameters (HTTP headers are referenced with a HTTP_ prefix as PHP does)
+     * @param string  $content       The raw body data
+     * @param Boolean $changeHistory Whether to update the history or not (only used internally for back(), forward(), and reload())
+     *
+     * @return Crawler
+     *
+     * @api
+     */
+    public function request($method, $uri, array $parameters = array(), array $files = array(), array $server = array(), $content = null, $changeHistory = true, $c_type = "")
+    {
+        $uri = $this->getAbsoluteUri($uri);
+
+        $server = array_merge($this->server, $server);
+        if (!$this->history->isEmpty()) {
+            $server['HTTP_REFERER'] = $this->history->current()->getUri();
+        }
+        $server['HTTP_HOST'] = parse_url($uri, PHP_URL_HOST);
+        $server['HTTPS'] = 'https' == parse_url($uri, PHP_URL_SCHEME);
+
+        $request = new Request($uri, $method, $parameters, $files, $this->cookieJar->allValues($uri), $server, $content);
+
+        $this->request = $this->filterRequest($request);
+
+        if (true === $changeHistory) {
+            $this->history->add($request);
+        }
+
+        if ($this->insulated) {
+            $this->response = $this->doRequestInProcess($this->request);
+        } else {
+            $this->response = $this->doRequest($this->request);
+        }
+
+        $response = $this->filterResponse($this->response);
+
+        $this->cookieJar->updateFromResponse($response, $uri);
+
+        $this->redirect = $response->getHeader('Location');
+
+        if ($this->followRedirects && $this->redirect) {
+            return $this->crawler = $this->followRedirect();
+        }
+
+        //begin my modified
+        $content = $response->getContent();
+        if ($c_type == 'xml') {
+            // echo $response->getHeader('Content-Type').PHP_EOL;
+            $content_type = "text/xml\r\n";
+            //избавляемся от битых символов
+            $content = iconv('utf-8', 'utf-8//IGNORE', $response->getContent());
+        }
+        else {
+            $content_type = $response->getHeader('Content-Type');
+        }
+
+        //end my modified
+        return $this->crawler = $this->createCrawlerFromContent($request->getUri(), $content, $content_type);
+    }
+
+    public function multirequest($requests)
+    {
+        foreach ($requests as $key => &$req) {
+            $req['uri'] = $this->getAbsoluteUri($req['uri']); // не уверена что надо
+            $req['host'] = parse_url($req['uri'], PHP_URL_HOST);
+            $req['path'] = parse_url($req['uri'], PHP_URL_PATH);
+            $req['port'] = 80;
+            $req['headers'] = array();
+            $req['headers']['Host'] = $req['host'];
+            $req['headers']['Accept-encoding'] = 'identity';
+            $req['headers']['User-Agent'] = $this->config['useragent'];
+            // Set HTTP authentication if needed
+            if (!empty($this->auth)) {
+                switch ($this->auth['type']) {
+                    case self::AUTH_BASIC :
+                        $auth = $this->calcAuthDigest($this->auth['user'], $this->auth['password'], $this->auth['type']);
+                        if ($auth !== false) {
+                            $req['headers']['Authorization'] = 'Basic ' . $auth;
+                        }
+                        break;
+                    case self::AUTH_DIGEST :
+                        throw new Exception\RuntimeException("The digest authentication is not implemented yet");
+                }
+            }
+          
+            $this->request[$key] = $req;
+        }
+
+        $response = $this->doMultiRequest($this->request);
+
+        foreach ($response as $key => $res) {
+           $content[$requests[$key]['uri']] = $res;
+            //$this->cookieJar->updateFromResponse($response, $requests[$key]['uri']);
+        }
+
+       return $content;
+    }
+
+    protected function doMultiRequest($requests)
+    {
+        $client = new MultiClient();
+        $response = $client->execute($requests);
+        return $response;
+
     }
 
     protected function doRequest($request)
@@ -64,22 +179,26 @@ class Client extends BaseClient
         return $this->createResponse($response);
     }
 
+
     protected function createClient(Request $request)
     {
         $client = $this->createZendClient();
         $client->setUri($request->getUri());
         $client->setConfig(array_merge(array(
-            'maxredirects' => 0,
-            'timeout'      => 30,
-            'useragent'    => $this->server['HTTP_USER_AGENT'],
-            'adapter'      => 'Zend\\Http\\Client\\Adapter\\Socket',
-            ), $this->zendConfig));
+                                            'maxredirects' => 0,
+                                            'timeout' => 30,
+                                            'useragent' => $this->server['HTTP_USER_AGENT'],
+                                            'adapter' => 'Zend\\Http\\Client\\Adapter\\Curl',
+                                       ), $this->zendConfig));
         $client->setMethod(strtoupper($request->getMethod()));
 
         if ('POST' == $request->getMethod()) {
             $client->setParameterPost($request->getParameters());
         }
-        $client->setHeaders($this->headers);
+
+        foreach ($this->headers as $name => $value) {
+            $client->setHeaders($name, $value);
+        }
 
         if ($this->auth !== null) {
             $client->setAuth(
@@ -113,6 +232,6 @@ class Client extends BaseClient
 
     protected function createZendClient()
     {
-        return new ZendClient(null, array('encodecookies' => false));
+        return new ZendClient();
     }
 }
