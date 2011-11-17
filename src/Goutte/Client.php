@@ -68,12 +68,14 @@ class Client extends BaseClient
      * @param array   $server        The server parameters (HTTP headers are referenced with a HTTP_ prefix as PHP does)
      * @param string  $content       The raw body data
      * @param Boolean $changeHistory Whether to update the history or not (only used internally for back(), forward(), and reload())
+     * @param string  $c_type        content-type
+     * @param string  $http_referer  The data from another Client
      *
      * @return Crawler
      *
      * @api
      */
-    public function request($method, $uri, array $parameters = array(), array $files = array(), array $server = array(), $content = null, $changeHistory = true, $c_type = "")
+    public function request($method, $uri, array $parameters = array(), array $files = array(), array $server = array(), $content = null, $changeHistory = true, $c_type = '')
     {
         $uri = $this->getAbsoluteUri($uri);
 
@@ -81,11 +83,11 @@ class Client extends BaseClient
         if (!$this->history->isEmpty()) {
             $server['HTTP_REFERER'] = $this->history->current()->getUri();
         }
+        
         $server['HTTP_HOST'] = parse_url($uri, PHP_URL_HOST);
         $server['HTTPS'] = 'https' == parse_url($uri, PHP_URL_SCHEME);
 
         $request = new Request($uri, $method, $parameters, $files, $this->cookieJar->allValues($uri), $server, $content);
-
         $this->request = $this->filterRequest($request);
 
         if (true === $changeHistory) {
@@ -126,6 +128,7 @@ class Client extends BaseClient
 
     public function multirequest($requests)
     {
+        $requests_array = array();
         foreach ($requests as $key => &$req) {
             $req['uri'] = $this->getAbsoluteUri($req['uri']); // не уверена что надо
             $req['host'] = parse_url($req['uri'], PHP_URL_HOST);
@@ -148,18 +151,17 @@ class Client extends BaseClient
                         throw new Exception\RuntimeException("The digest authentication is not implemented yet");
                 }
             }
-          
-            $this->request[$key] = $req;
+
+            $requests_array[$key] = $req;
         }
-
-        $response = $this->doMultiRequest($this->request);
-
+        $response = $this->doMultiRequest($requests_array);
         foreach ($response as $key => $res) {
-           $content[$requests[$key]['uri']] = $res;
+            $content[$requests[$key]['uri']] = $res;
+            unset($res);
             //$this->cookieJar->updateFromResponse($response, $requests[$key]['uri']);
         }
 
-       return $content;
+        return $content;
     }
 
     protected function doMultiRequest($requests)
@@ -167,7 +169,6 @@ class Client extends BaseClient
         $client = new MultiClient();
         $response = $client->execute($requests);
         return $response;
-
     }
 
     protected function doRequest($request)
@@ -178,7 +179,6 @@ class Client extends BaseClient
 
         return $this->createResponse($response);
     }
-
 
     protected function createClient(Request $request)
     {
@@ -232,6 +232,6 @@ class Client extends BaseClient
 
     protected function createZendClient()
     {
-       return new ZendClient(null, array('encodecookies' => false));
+        return new ZendClient(null, array('encodecookies' => false));
     }
 }
