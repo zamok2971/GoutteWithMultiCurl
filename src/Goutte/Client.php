@@ -83,7 +83,7 @@ class Client extends BaseClient
         if (!$this->history->isEmpty()) {
             $server['HTTP_REFERER'] = $this->history->current()->getUri();
         }
-        
+
         $server['HTTP_HOST'] = parse_url($uri, PHP_URL_HOST);
         $server['HTTPS'] = 'https' == parse_url($uri, PHP_URL_SCHEME);
 
@@ -137,7 +137,9 @@ class Client extends BaseClient
             $req['headers'] = array();
             $req['headers']['Host'] = $req['host'];
             $req['headers']['Accept-encoding'] = 'identity';
-            $req['headers']['User-Agent'] = $this->config['useragent'];
+            if (isset($req['useragent'])) {
+                $req['headers']['User-Agent'] = $req['useragent'];
+            }
             // Set HTTP authentication if needed
             if (!empty($this->auth)) {
                 switch ($this->auth['type']) {

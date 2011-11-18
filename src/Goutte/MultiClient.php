@@ -31,8 +31,7 @@ class MultiClient extends ZendClient
 
     protected $curl = array();
 
-   // protected $response = array();
-
+    // protected $response = array();
 
     /**
      * Initialize curl
@@ -45,12 +44,12 @@ class MultiClient extends ZendClient
      */
     public function execute($requests)
     {
-        $mem_usage_start = memory_get_usage(true);
+        // $mem_usage_start = memory_get_usage(true);
         // If we're already connected, disconnect first
         if ($this->mcurl) {
-            foreach ($this->curl as $key=>$curl) {
+            foreach ($this->curl as $key => $curl) {
                 if ($curl) {
-                    $this->cclose($curl,$key);
+                    $this->cclose($curl, $key);
                 }
             }
             $this->mclose();
@@ -67,26 +66,26 @@ class MultiClient extends ZendClient
 
         // Do the actual connection
         $this->mcurl = curl_multi_init();
-        foreach ($requests as $k =>&$request) {
-            
-            $request_params = array('parameters'=>array(), 'files'=>array(), 'server'=>array(), 'content'=>null, 'changeHistory'=>true);
-            foreach($request_params as $kpar=>$param){
-                if(!isset($request[$kpar])){
+        foreach ($requests as $k => &$request) {
+
+            $request_params = array('parameters' => array(), 'files' => array(), 'server' => array(), 'content' => null, 'changeHistory' => true);
+            foreach ($request_params as $kpar => $param) {
+                if (!isset($request[$kpar])) {
                     $request[$kpar] = $param;
                 }
             }
 
-             // cookies
+            // cookies
             $secure = false; // https или http
             $cookie = $this->prepareCookies($request['host'], $request['path'], $secure);
             if ($cookie->getFieldValue()) {
-               $request['headers']['Cookie'] = $cookie->getFieldValue();
+                $request['headers']['Cookie'] = $cookie->getFieldValue();
             }
-            
+
             $uri = $request['uri'];
             $this->curl[$k] = curl_init($uri);
 
-           /* if ($request['port'] != 80) {
+            /* if ($request['port'] != 80) {
                 curl_setopt($this->curl[$k], CURLOPT_PORT, intval($request['port']));
             }*/
             // Set timeout
@@ -99,7 +98,7 @@ class MultiClient extends ZendClient
                 throw new AdapterException\RuntimeException('Unable to Connect to ' . $request['host'] . ':' . $request['port']);
             }
 
-           /* if ($request['secure'] !== false) {
+            /* if ($request['secure'] !== false) {
                 // Behave the same like Zend\Http\Adapter\Socket on SSL options.
                 if (isset($this->config['sslcert'])) {
                     curl_setopt($this->curl[$k], CURLOPT_SSLCERT, $this->config['sslcert']);
@@ -180,13 +179,14 @@ class MultiClient extends ZendClient
                     // For now, through an exception for unsupported request methods
                     throw new AdapterException\InvalidArgumentException("Method currently not supported");
             }
-
-            if (is_resource($request['body']) && $curlMethod != CURLOPT_PUT) {
-                throw new AdapterException\RuntimeException("Streaming requests are allowed only with PUT");
+            if (isset($request['body'])) {
+                if (is_resource($request['body']) && $curlMethod != CURLOPT_PUT) {
+                    throw new AdapterException\RuntimeException("Streaming requests are allowed only with PUT");
+                }
             }
 
             // get http version to use
-            $curlHttp = ($request['httpVersion'] == 1.1) ? CURL_HTTP_VERSION_1_1 : CURL_HTTP_VERSION_1_0;
+            $curlHttp = (isset($request['httpVersion']) && $request['httpVersion'] == 1.1) ? CURL_HTTP_VERSION_1_1 : CURL_HTTP_VERSION_1_0;
 
             // mark as HTTP request and set HTTP method
             curl_setopt($this->curl[$k], $curlHttp, true);
@@ -203,7 +203,9 @@ class MultiClient extends ZendClient
 
                 // ensure actual response is returned
                 curl_setopt($this->curl[$k], CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($this->curl[$k], CURLOPT_REFERER, $request['http_referer']);
+                if(isset($request['http_referer'])){
+                    curl_setopt($this->curl[$k], CURLOPT_REFERER, $request['http_referer']);
+                }
             }
             // set additional headers
             $request['headers']['Accept'] = '';
@@ -243,7 +245,7 @@ class MultiClient extends ZendClient
         // send the request
         $running = null;
         //запускаем дескрипторы
-        echo (count($this->curl))."\n";
+        echo (count($this->curl)) . "\n";
         do {
             curl_multi_exec($this->mcurl, $running);
             usleep(10000);
@@ -256,11 +258,11 @@ class MultiClient extends ZendClient
         $requestTexts = array();
         foreach ($this->curl as $key => $curl) {
             $request = curl_getinfo($curl, CURLINFO_HEADER_OUT);
-            $request .= $requests[$key]['body'];
+            $request .= isset($requests[$key]['body']) ? $requests[$key]['body'] : '';
             $requestTexts[$key] = $request;
             $response = curl_multi_getcontent($curl);
-            $this->cclose($curl,$key);
-         /*   if (empty($response)) {
+            $this->cclose($curl, $key);
+            /*   if (empty($response)) {
               //  throw new AdapterException\RuntimeException("Error in cURL request: " . curl_error($curl));
             }
             // cURL automatically decodes chunked-messages, this means we have to disallow the Zend\Http\Response to do it again
@@ -283,14 +285,13 @@ class MultiClient extends ZendClient
             if (stripos($response, "HTTP/1.0 200 Connection established\r\n\r\n") !== false) {
                 $response = str_ireplace("HTTP/1.0 200 Connection established\r\n\r\n", '', $response);
             }*/
-           $responses[$key] = $response;
-          
+            $responses[$key] = $response;
         }
         $this->mclose();
-        
-        $mem_usage_end = memory_get_usage(true);
-        $mem_usage = $mem_usage_end - $mem_usage_start;
-        echo "mem_usage in MultiCurl - $mem_usage \n ";
+
+        /*   $mem_usage_end = memory_get_usage(true);
+ $mem_usage = $mem_usage_end - $mem_usage_start;
+ echo "mem_usage in MultiCurl - $mem_usage \n ";*/
 
         return $responses;
     }
@@ -300,7 +301,7 @@ class MultiClient extends ZendClient
      * Close the connection to the server
      *
      */
-    public function cclose($curl,$key)
+    public function cclose($curl, $key)
     {
         if (is_resource($curl)) {
             curl_multi_remove_handle($this->mcurl, $curl);
