@@ -47,6 +47,17 @@ class Client extends BaseClient
     public function setHeader($name, $value)
     {
         $this->headers[$name] = $value;
+       
+    }
+
+    public function getHeaders()
+    {
+        return $this->headers;
+    }
+
+    public function getHistory()
+    {
+        return $this->history;
     }
 
     public function setAuth($user, $password = '', $type = ZendClient::AUTH_BASIC)
@@ -75,14 +86,18 @@ class Client extends BaseClient
      *
      * @api
      */
-    public function request($method, $uri, array $parameters = array(), array $files = array(), array $server = array(), $content = null, $changeHistory = true, $c_type = '')
+    public function request($method, $uri, array $parameters = array(), array $files = array(), array $server = array(), $content = null, $changeHistory = true, $c_type = '', $http_referer ='')
     {
         $uri = $this->getAbsoluteUri($uri);
-
         $server = array_merge($this->server, $server);
         if (!$this->history->isEmpty()) {
             $server['HTTP_REFERER'] = $this->history->current()->getUri();
         }
+
+        if($http_referer){
+            $server['HTTP_REFERER'] = $http_referer;
+        }
+
 
         $server['HTTP_HOST'] = parse_url($uri, PHP_URL_HOST);
         $server['HTTPS'] = 'https' == parse_url($uri, PHP_URL_SCHEME);
@@ -113,23 +128,28 @@ class Client extends BaseClient
         //begin my modified
         $content = $response->getContent();
         if ($c_type == 'xml') {
-            // echo $response->getHeader('Content-Type').PHP_EOL;
             $content_type = "text/xml\r\n";
             //избавляемся от битых символов
-            $content = iconv('utf-8', 'utf-8//IGNORE', $response->getContent());
+            $content = iconv('utf-8', 'utf-8//IGNORE', $content);
         }
         else {
             $content_type = $response->getHeader('Content-Type');
         }
-
         //end my modified
         return $this->crawler = $this->createCrawlerFromContent($request->getUri(), $content, $content_type);
+    }
+
+    public function getContent()
+    {
+        $response = $this->filterResponse($this->response);
+        return $response->getContent();
     }
 
     public function multirequest($requests)
     {
         $requests_array = array();
         foreach ($requests as $key => &$req) {
+            $req['uri']."\n";
             $req['uri'] = $this->getAbsoluteUri($req['uri']); // не уверена что надо
             $req['host'] = parse_url($req['uri'], PHP_URL_HOST);
             $req['path'] = parse_url($req['uri'], PHP_URL_PATH);
@@ -160,7 +180,6 @@ class Client extends BaseClient
         foreach ($response as $key => $res) {
             $content[$requests[$key]['uri']] = $res;
             unset($res);
-            //$this->cookieJar->updateFromResponse($response, $requests[$key]['uri']);
         }
 
         return $content;
@@ -196,11 +215,9 @@ class Client extends BaseClient
 
         if ('POST' == $request->getMethod()) {
             $client->setParameterPost($request->getParameters());
+           
         }
-
-        foreach ($this->headers as $name => $value) {
-            $client->setHeaders($name, $value);
-        }
+         $client->setHeaders($this->headers);
 
         if ($this->auth !== null) {
             $client->setAuth(

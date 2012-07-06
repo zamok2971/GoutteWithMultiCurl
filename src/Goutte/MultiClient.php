@@ -85,9 +85,6 @@ class MultiClient extends ZendClient
             $uri = $request['uri'];
             $this->curl[$k] = curl_init($uri);
 
-            /* if ($request['port'] != 80) {
-                curl_setopt($this->curl[$k], CURLOPT_PORT, intval($request['port']));
-            }*/
             // Set timeout
             curl_setopt($this->curl[$k], CURLOPT_CONNECTTIMEOUT, $this->config['timeout']);
             // Set Max redirects
@@ -97,16 +94,6 @@ class MultiClient extends ZendClient
 
                 throw new AdapterException\RuntimeException('Unable to Connect to ' . $request['host'] . ':' . $request['port']);
             }
-
-            /* if ($request['secure'] !== false) {
-                // Behave the same like Zend\Http\Adapter\Socket on SSL options.
-                if (isset($this->config['sslcert'])) {
-                    curl_setopt($this->curl[$k], CURLOPT_SSLCERT, $this->config['sslcert']);
-                }
-                if (isset($this->config['sslpassphrase'])) {
-                    curl_setopt($this->curl[$k], CURLOPT_SSLCERTPASSWD, $this->config['sslpassphrase']);
-                }
-            }*/
 
             // Update connected_to
             //$this->connectedTo[$uri] = array($request['host'], $request['port']);
@@ -186,7 +173,8 @@ class MultiClient extends ZendClient
             }
 
             // get http version to use
-            $curlHttp = (isset($request['httpVersion']) && $request['httpVersion'] == 1.1) ? CURL_HTTP_VERSION_1_1 : CURL_HTTP_VERSION_1_0;
+            $curlHttp = (isset($request['httpVersion']) && $request['httpVersion'] == 1.1) ? CURL_HTTP_VERSION_1_1
+                    : CURL_HTTP_VERSION_1_0;
 
             // mark as HTTP request and set HTTP method
             curl_setopt($this->curl[$k], $curlHttp, true);
@@ -203,7 +191,7 @@ class MultiClient extends ZendClient
 
                 // ensure actual response is returned
                 curl_setopt($this->curl[$k], CURLOPT_RETURNTRANSFER, true);
-                if(isset($request['http_referer'])){
+                if (isset($request['http_referer'])) {
                     curl_setopt($this->curl[$k], CURLOPT_REFERER, $request['http_referer']);
                 }
             }
@@ -244,54 +232,22 @@ class MultiClient extends ZendClient
 
         // send the request
         $running = null;
-        //запускаем дескрипторы
-        echo (count($this->curl)) . "\n";
         do {
             curl_multi_exec($this->mcurl, $running);
             usleep(10000);
         } while ($running > 0);
 
-        // if we used streaming, headers are already there
-        /* if (!is_resource($this->outputStream)) {
-            $this->response = $response;
-        }*/
         $requestTexts = array();
+        $responses = array();
         foreach ($this->curl as $key => $curl) {
             $request = curl_getinfo($curl, CURLINFO_HEADER_OUT);
             $request .= isset($requests[$key]['body']) ? $requests[$key]['body'] : '';
             $requestTexts[$key] = $request;
             $response = curl_multi_getcontent($curl);
             $this->cclose($curl, $key);
-            /*   if (empty($response)) {
-              //  throw new AdapterException\RuntimeException("Error in cURL request: " . curl_error($curl));
-            }
-            // cURL automatically decodes chunked-messages, this means we have to disallow the Zend\Http\Response to do it again
-            if (stripos($response, "Transfer-Encoding: chunked\r\n")) {
-                $response = str_ireplace("Transfer-Encoding: chunked\r\n", '', $response);
-            }
-
-            // Eliminate multiple HTTP responses.
-            do {
-                $parts = preg_split('|(?:\r?\n){2}|m', $response, 2);
-                $again = false;
-
-                if (isset($parts[1]) && preg_match("|^HTTP/1\.[01](.*?)\r\n|mi", $parts[1])) {
-                    $response = $parts[1];
-                    $again = true;
-                }
-            } while ($again);
-
-            // cURL automatically handles Proxy rewrites, remove the "HTTP/1.0 200 Connection established" string:
-            if (stripos($response, "HTTP/1.0 200 Connection established\r\n\r\n") !== false) {
-                $response = str_ireplace("HTTP/1.0 200 Connection established\r\n\r\n", '', $response);
-            }*/
             $responses[$key] = $response;
         }
         $this->mclose();
-
-        /*   $mem_usage_end = memory_get_usage(true);
- $mem_usage = $mem_usage_end - $mem_usage_start;
- echo "mem_usage in MultiCurl - $mem_usage \n ";*/
 
         return $responses;
     }
