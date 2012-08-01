@@ -2,13 +2,13 @@
 
 namespace Goutte;
 
-use MultiClient;
 use Symfony\Component\BrowserKit\Client as BaseClient;
 use Symfony\Component\BrowserKit\History;
 use Symfony\Component\BrowserKit\CookieJar;
 use Symfony\Component\BrowserKit\Request;
 use Symfony\Component\BrowserKit\Response;
 
+use  Zend\Http\Client\Adapter\Exception as AdapterException;
 use Zend\Http\Client as ZendClient;
 use Zend\Http\Response as ZendResponse;
 
@@ -170,7 +170,7 @@ class Client extends BaseClient
                         }
                         break;
                     case self::AUTH_DIGEST :
-                        throw new Exception\RuntimeException("The digest authentication is not implemented yet");
+                        throw new AdapterException\RuntimeException("The digest authentication is not implemented yet");
                 }
             }
 

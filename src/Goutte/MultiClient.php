@@ -1,4 +1,5 @@
 <?php
+namespace Goutte;
 
 use Goutte\Client as GoutteClient;
 use Symfony\Component\BrowserKit\Client as BaseClient;
@@ -7,6 +8,7 @@ use Symfony\Component\BrowserKit\CookieJar;
 use Symfony\Component\BrowserKit\Request;
 use Symfony\Component\BrowserKit\Response;
 
+use Zend\Http\Client\Adapter\Exception as AdapterException;
 use Zend\Http\Client as ZendClient;
 use Zend\Http\Response as ZendResponse;
 
@@ -57,9 +59,9 @@ class MultiClient extends ZendClient
 
         // If we are connected to a different server or port, disconnect first
         if ($this->mcurl
-            && is_array($this->connectedTo)
-            && ($this->connectedTo[0] != $requests['host'][0]
-                || $this->connectedTo[1] != $requests['port'][0])
+                && is_array($this->connectedTo)
+                && ($this->connectedTo[0] != $requests['host'][0]
+                        || $this->connectedTo[1] != $requests['port'][0])
         ) {
             $this->mclose();
         }
