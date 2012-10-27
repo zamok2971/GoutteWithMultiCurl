@@ -2,7 +2,6 @@
 
 namespace Goutte;
 
-use MultiClient;
 use Symfony\Component\BrowserKit\Client as BaseClient;
 use Symfony\Component\BrowserKit\History;
 use Symfony\Component\BrowserKit\CookieJar;
@@ -136,7 +135,10 @@ class Client extends BaseClient
             $content_type = $response->getHeader('Content-Type');
         }
         //end my modified
-        return $this->crawler = $this->createCrawlerFromContent($request->getUri(), $content, $content_type);
+        if($content){
+            return $this->crawler = $this->createCrawlerFromContent($request->getUri(), $content, $content_type);
+        }
+        return false;
     }
 
     public function getContent()

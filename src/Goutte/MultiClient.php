@@ -1,5 +1,5 @@
 <?php
-
+namespace Goutte;
 use Goutte\Client as GoutteClient;
 use Symfony\Component\BrowserKit\Client as BaseClient;
 use Symfony\Component\BrowserKit\History;
