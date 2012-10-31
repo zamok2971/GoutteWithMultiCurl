@@ -136,7 +136,10 @@ class Client extends BaseClient
             $content_type = $response->getHeader('Content-Type');
         }
         //end my modified
-        return $this->crawler = $this->createCrawlerFromContent($request->getUri(), $content, $content_type);
+        if($content){
+            return $this->crawler = $this->createCrawlerFromContent($request->getUri(), $content, $content_type);
+        }
+        return false;
     }
 
     public function getContent()
